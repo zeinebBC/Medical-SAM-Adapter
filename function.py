@@ -29,7 +29,7 @@ import torch
 from einops import rearrange
 import pytorch_ssim
 import models.sam.utils.transforms as samtrans
-
+import logging
 # from lucent.modelzoo.util import get_model_layers
 # from lucent.optvis import render, param, transform, objectives
 # from lucent.modelzoo import inceptionv1
@@ -39,16 +39,18 @@ import tempfile
 
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
+from prompter.prompter import *
 from monai.losses import DiceCELoss
 from monai.inferers import sliding_window_inference
 from monai.transforms import (
     AsDiscrete,
 )
 
+from torchmetrics import Accuracy, Precision, Recall, JaccardIndex, F1Score
 
 import torch
 
+logger = logging.getLogger(__name__)
 
 args = cfg.parse_args()
 
@@ -69,6 +71,270 @@ global_step_best = 0
 epoch_loss_values = []
 metric_values = []
 
+
+#### deepvision
+def train_sam_deepvision(args, net: nn.Module, optimizer, train_loader,
+          epoch, writer,vis_path, schedulers=None, vis = 1):
+    epoch_loss = 0
+    ind = 0
+    # train mode
+    net.train()
+    optimizer.zero_grad()
+    # Freeze all non-adapter layers of SAM
+    for n, value in net.image_encoder.named_parameters():
+        if "Adapter" not in n:
+            value.requires_grad = False
+
+    GPUdevice = torch.device('cuda:' + str(args.gpu_device))
+    device = GPUdevice
+    
+    lossfunc = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    
+    # PROMPT SETUP
+    N_POINTS_MAX = 10
+    N_MAX_ITER_PROMPTS = 3
+    # Metrics setup
+    metrics = [
+        Accuracy(task='binary').to(device), 
+        Precision(task='binary').to(device), 
+        Recall(task='binary').to(device), 
+        F1Score(task='binary').to(device), 
+        JaccardIndex(task='binary').to(device)
+    ]
+    with tqdm(total=len(train_loader), desc=f'Epoch {epoch}', unit='img') as pbar:
+        for pack in train_loader:
+            preds = []
+            prompts = []
+            original_preds = []
+            imgs = pack['image'].to(dtype = torch.float32, device = GPUdevice)
+            targets = pack['label'].to(dtype = torch.float32, device = GPUdevice)
+            names = pack['metadata']
+            batch_loss = 0.0
+            for img, mask in zip(imgs, targets):
+                img_emb = net.image_encoder(img.unsqueeze(0))
+                # Create Prompts
+                
+            
+                # Randomly sample number of prompts
+                #n_points = np.random.randint(1, N_POINTS_MAX)
+                #n_pos = np.random.randint(1, n_points) if n_points > 1 else 1
+                #n_neg = np.random.randint(0, n_points-n_pos) if (n_points - n_pos) > 0 else 0
+                n_neg = 0
+                n_pos = 10
+                pts, lbls = sample_from_mask(mask.squeeze(0), mode="random", n_pos=n_pos,n_neg = n_neg) 
+                
+
+                user_iter = 0 
+                # Randomly add pseudo user input 
+                #user_iter = np.random.randint(N_MAX_ITER_PROMPTS)
+                for i in range(user_iter):
+                    # print(f'User interaction {i+1}/{user_iter}')
+                    with torch.no_grad():
+                        # Set prompt
+                        prompt = (pts.unsqueeze(0).to(device), lbls.unsqueeze(0).to(device))
+                        se, de = net.prompt_encoder(
+                            points=prompt,
+                            boxes=None,
+                            masks=None,
+                        ) # type: ignore
+                        
+                        # Predict Mask
+                        pred, _ = net.mask_decoder(
+                            image_embeddings=img_emb,
+                            image_pe=net.prompt_encoder.get_dense_pe(),  # type: ignore
+                            sparse_prompt_embeddings=se,
+                            dense_prompt_embeddings=de, 
+                            multimask_output=False,
+                        ) # type: ignore
+                        # Compare Prediction to GT
+                        pred = F.interpolate(pred, mask.shape[-2:]) # This is a bit cumbersome, but the easiest fix for now
+                        pred = pred.squeeze() > 0 #check if 0 or 0.5 with david
+                        clusters = pred.cpu() != mask
+                        # Sample point from largest error cluster 
+                        new_prompt = find_best_new_prompt(clusters)
+                        new_label = mask[new_prompt[0, 1], new_prompt[0, 0]].to(torch.int64)
+                        pts = torch.concatenate([pts, new_prompt])
+                        lbls = torch.concatenate([lbls, torch.tensor([new_label])])
+
+                # Final Mask inference
+                prompts.append([pts,lbls])
+                prompt = (pts.unsqueeze(0).to(device), lbls.unsqueeze(0).to(device))
+
+                # Set Prompt
+                with torch.no_grad():
+                    se, de = net.prompt_encoder(
+                        points=prompt, 
+                        boxes=None,
+                        masks=None,
+                    ) # type: ignore
+
+                # Predict Mask
+                pred, _ = net.mask_decoder(
+                    image_embeddings=img_emb,
+                    image_pe=net.prompt_encoder.get_dense_pe(),  # type: ignore
+                    sparse_prompt_embeddings=se,
+                    dense_prompt_embeddings=de, 
+                    multimask_output=False,
+                ) # type: ignore
+                original_preds.append((pred.squeeze(0) > 0).float())
+                pred = F.interpolate(pred, mask.shape[-2:]).squeeze(0) # This is a bit cumbersome, but the easiest fix for now
+                preds.append((pred> 0).float())
+                loss = lossfunc(pred, mask)
+                batch_loss += loss
+                epoch_loss += loss.item()
+                for m in metrics:
+                    m.update(pred, mask)
+
+            pbar.set_postfix(**{'loss (batch)': batch_loss.item()}) # type: ignore
+            batch_loss.backward()
+
+            writer.add_scalar('Batch_loss/train', batch_loss.item(), ind + epoch*len(train_loader))
+            # nn.utils.clip_grad_value_(net.parameters(), 0.1)
+            optimizer.step()
+            optimizer.zero_grad()
+
+            
+            
+            if vis:
+                if ind % vis == 0:
+                    visualize_batch(imgs=imgs, masks=targets, pred_masks=preds, names=names, prompts=prompts,original_preds=original_preds,save_path=vis_path)
+
+            ind += 1
+            pbar.update()
+
+    for m in metrics:
+        out = m.compute().cpu()
+        writer.add_scalar(f'{type(m).__name__}/train', out, epoch)
+    writer.add_scalar('Epoch_loss/Val', epoch_loss, epoch)
+    schedulers.step()
+    writer.add_scalar('lr', optimizer.param_groups[0]["lr"], epoch)
+    return epoch_loss
+
+def validation_sam_deepvision(args, net: nn.Module,  val_loader, epoch, writer,vis_path, vis = 1):
+    net.eval()
+
+    epoch_loss = 0
+    ind = 0
+
+    GPUdevice = torch.device('cuda:' + str(args.gpu_device))
+    device = GPUdevice
+    
+    metrics = [
+        Accuracy(task='binary').to(device), 
+        Precision(task='binary').to(device), 
+        Recall(task='binary').to(device), 
+        F1Score(task='binary').to(device), 
+        JaccardIndex(task='binary').to(device)
+    ]
+    lossfunc = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    N_POINTS_MAX = 3
+    N_MAX_ITER_PROMPTS = 3
+    with torch.no_grad():
+        with tqdm(total=len(val_loader), desc=f'Epoch {epoch}', unit='img') as pbar:
+            for pack in val_loader:
+                preds = []
+                prompts = []
+                original_preds = []
+                imgs = pack['image'].to(dtype = torch.float32, device = GPUdevice)
+                targets = pack['label'].to(dtype = torch.float32, device = GPUdevice)
+                names = pack['metadata']
+                batch_loss = 0.0
+                for img, mask in zip(imgs, targets):
+                    img_emb = net.image_encoder(img.unsqueeze(0))
+                    # Create Prompts
+                    
+                
+                    # Randomly sample number of prompts
+                    #n_points = np.random.randint(1, N_POINTS_MAX)
+                    #n_pos = np.random.randint(1, n_points) if n_points > 1 else 1
+                    #n_neg = np.random.randint(0, n_points-n_pos) if (n_points - n_pos) > 0 else 0
+                    n_neg = 0
+                    n_pos = 10
+                    pts, lbls = sample_from_mask(mask.squeeze(0), mode="random", n_pos=n_pos,n_neg = n_neg) 
+        
+
+                    user_iter = 0 
+                    # Randomly add pseudo user input 
+                    #user_iter = np.random.randint(N_MAX_ITER_PROMPTS)
+                    for i in range(user_iter):
+                        # print(f'User interaction {i+1}/{user_iter}')
+                        
+                        # Set prompt
+                        prompt = (pts.unsqueeze(0).to(device), lbls.unsqueeze(0).to(device))
+                        se, de = net.prompt_encoder(
+                            points=prompt,
+                            boxes=None,
+                            masks=None,
+                        ) # type: ignore
+                        
+                        # Predict Mask
+                        pred, _ = net.mask_decoder(
+                            image_embeddings=img_emb,
+                            image_pe=net.prompt_encoder.get_dense_pe(),  # type: ignore
+                            sparse_prompt_embeddings=se,
+                            dense_prompt_embeddings=de, 
+                            multimask_output=False,
+                        ) # type: ignore
+                        # Compare Prediction to GT
+                        pred = F.interpolate(pred, mask.shape[-2:]) # This is a bit cumbersome, but the easiest fix for now
+                        pred = pred.squeeze() > 0 #check this!!!
+                        clusters = pred.cpu() != mask
+                        # Sample point from largest error cluster 
+                        new_prompt = find_best_new_prompt(clusters)
+                        new_label = mask[new_prompt[0, 1], new_prompt[0, 0]].to(torch.int64)
+                        pts = torch.concatenate([pts, new_prompt])
+                        lbls = torch.concatenate([lbls, torch.tensor([new_label])])
+
+                    # Final Mask inference
+                    prompts.append([pts,lbls])
+                    prompt = (pts.unsqueeze(0).to(device), lbls.unsqueeze(0).to(device))
+
+                    # Set Prompt
+                    with torch.no_grad():
+                        se, de = net.prompt_encoder(
+                            points=prompt,
+                            boxes=None,
+                            masks=None,
+                        ) # type: ignore
+
+                    # Predict Mask
+                    pred, _ = net.mask_decoder(
+                        image_embeddings=img_emb,
+                        image_pe=net.prompt_encoder.get_dense_pe(),  # type: ignore
+                        sparse_prompt_embeddings=se,
+                        dense_prompt_embeddings=de, 
+                        multimask_output=False,
+                    ) # type: ignore
+                    original_preds.append((pred.squeeze(0) > 0).float())
+                    pred = F.interpolate(pred, mask.shape[-2:]).squeeze(0) # This is a bit cumbersome, but the easiest fix for now
+                    preds.append((pred > 0).float())
+                    loss = lossfunc(pred, mask)
+                    batch_loss += loss
+                    epoch_loss += loss.item()
+                    for m in metrics:
+                        m.update(pred, mask)
+                writer.add_scalar('Batch_loss/Val', batch_loss.item(), ind + epoch*len(val_loader))
+
+                pbar.set_postfix(**{'loss (batch)': batch_loss.item()}) # type: ignore
+
+
+                '''vis images'''
+            if vis:
+                if ind % vis == 0:
+                    
+                    visualize_batch(imgs=imgs, masks=targets, pred_masks=preds, names=names, prompts=prompts,original_preds=original_preds,save_path= vis_path)
+
+            ind += 1
+            pbar.update()
+
+    metric_results = {}
+    for m in metrics:
+        out = m.compute().cpu()
+        writer.add_scalar(f'{type(m).__name__}/val', out, epoch)
+        metric_results[f'{type(m).__name__}'] = out
+    writer.add_scalar('Epoch_loss/Val', epoch_loss, epoch)
+
+    return epoch_loss, metric_results
 def train_sam(args, net: nn.Module, optimizer, train_loader,
           epoch, writer, schedulers=None, vis = 50):
     hard = 0
@@ -95,6 +361,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
             #     print(k)
             if 'pt' not in pack:
                 imgs, pt, masks = generate_click_prompt(imgs, masks)
+                #point_labels, pt, masks = generate_click_prompt_custom(masks)
             else:
                 pt = pack['pt']
                 point_labels = pack['p_label']
@@ -228,6 +495,7 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
             # for k,v in pack['image_meta_dict'].items():
             #     print(k)
             if 'pt' not in pack:
+                #point_labels, ptw, masksw = generate_click_prompt_custom(masksw)
                 imgsw, ptw, masksw = generate_click_prompt(imgsw, masksw)
             else:
                 ptw = pack['pt']
@@ -323,15 +591,15 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, clean_dir=True):
                     # Resize to the ordered output size
                     pred = F.interpolate(pred,size=(args.out_size,args.out_size))
                     tot += lossfunc(pred, masks)
-
-                    '''vis images'''
-                    if ind % args.vis == 0:
-                        namecat = 'Test'
-                        for na in name:
-                            img_name = na.split('/')[-1].split('.')[0]
-                            namecat = namecat + img_name + '+'
-                        vis_image(imgs,pred, masks, os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '.jpg'), reverse=False, points=showp)
-                    
+                    if args.vis:
+                        '''vis images'''
+                        if ind % args.vis == 0:
+                            namecat = 'Test'
+                            for na in name:
+                                img_name = na.split('/')[-1].split('.')[0]
+                                namecat = namecat + img_name + '+'
+                            vis_image(imgs,pred, masks, os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '.jpg'), reverse=False, points=showp)
+                        
 
                     temp = eval_seg(pred, masks, threshold)
                     mix_res = tuple([sum(a) for a in zip(mix_res, temp)])
