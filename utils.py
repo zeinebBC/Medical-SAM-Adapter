@@ -109,6 +109,50 @@ device = torch.device('cuda', args.gpu_device)
 # dis_lr = 0.0002
 # optimizerD = optim.Adam(netD.parameters(), lr=dis_lr, betas=(beta1, 0.999))
 '''end'''
+def visualize_batch(imgs, masks, pred_masks, names, prompts,original_preds, save_path='/home/zozchaab/Medical-SAM-Adapter/figs/vis'):
+    imgs = imgs.detach().cpu().numpy()
+    masks = masks.detach().cpu().numpy()
+    os.makedirs(save_path, exist_ok=True)
+    # Visualize each image, mask, and predicted mask
+    for i in range(imgs.shape[0]):
+        plt.figure(figsize=(12, 8))
+
+        # Plot original image
+        plt.subplot(2, 4, 1)
+        plt.imshow(imgs[i,0,:,:], cmap='gray')
+        # Plot prompts on the image
+        pts, lbls = prompts[i]
+        for pt, lbl in zip(pts, lbls):
+            pt = pt.detach().cpu().numpy()
+            color = 'green' if lbl else 'red'
+            plt.scatter(pt[0], pt[1], c=color, s=10)
+        plt.title('Original Image with prompts')
+        plt.axis('off')
+       
+        # Plot ground truth mask
+        plt.subplot(2, 4, 2)
+        plt.imshow(masks[i,0,:,:], cmap='gray')  
+        plt.title('Ground Truth Mask')
+        plt.axis('off')
+
+        # Plot predicted mask
+        plt.subplot(2, 4, 3)
+        pred_masks[i]=pred_masks[i].detach().cpu().numpy()
+        plt.imshow(pred_masks[i][0,:,:], cmap='gray')  
+        plt.title('Predicted Mask')
+        plt.axis('off')
+
+        # Plot predicted mask before interpolation 
+        plt.subplot(2, 4, 4)
+        original_preds[i]=original_preds[i].detach().cpu().numpy()
+        plt.imshow(original_preds[i][0,:,:], cmap='gray')  
+        plt.title('Predicted Mask before interpolation')
+        plt.axis('off')
+        
+
+        # Save the visualization
+        plt.savefig(f'{save_path}/{names[i]}_visualization.png')
+        plt.close()
 
 def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
     """ return given network
@@ -1136,7 +1180,28 @@ def random_click(mask, point_labels = 1, inout = 1):
     indices = np.argwhere(mask == inout)
     return indices[np.random.randint(len(indices))]
 
+def generate_click_prompt_custom(masks):
+    b, c, h, w = masks.size()
+    pt_list = []
+    msk_list = []
 
+    for i in range(b):
+        msk = masks[i, 0] 
+
+        random_index = torch.randint(0, h, (2,)).to(device = msk.device)
+        if msk[random_index[0],random_index[1]]==0:
+            msk = 1 - msk
+
+        pt_list.append(random_index)
+        msk_list.append(msk.unsqueeze(0))
+
+    pts = torch.stack(pt_list, dim=0)
+    masks = torch.stack(msk_list, dim=0)
+        
+    pt_labels = torch.ones(b)
+
+
+    return pt_labels, pts, masks
 def generate_click_prompt(img, msk, pt_label = 1):
     # return: prompt, prompt mask
     pt_list = []
