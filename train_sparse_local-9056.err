@@ -1,0 +1,26 @@
+Namespace(net='sam', baseline='unet', seg_net='transunet', mod='sam_adpt', exp_name='sparse_sampling_per_component', type='map', vis=100, reverse=False, pretrain=False, val_freq=5, gpu=True, gpu_device=0, sim_gpu=0, epoch_ini=1, image_size=120, out_size=120, patch_size=2, dim=512, depth=1, heads=16, mlp_dim=1024, w=4, b=3, s=True, warm=1, lr=0.0001, uinch=1, imp_lr=0.0003, weights=0, base_weights=0, sim_weights=0, distributed='none', dataset='iqs_dv', sam_ckpt='./checkpoint/sam/sam_vit_b_01ec64.pth', thd=False, chunk=96, num_sample=4, roi_size=96, evl_chunk=None, crop_size=(120, 120), data_path='/home/zozchaab/data/deepvision/deepvision', path_helper={'prefix': 'logs/sparse_sampling_per_component_2024_01_16_14_36_56', 'ckpt_path': 'logs/sparse_sampling_per_component_2024_01_16_14_36_56/Model', 'log_path': 'logs/sparse_sampling_per_component_2024_01_16_14_36_56/Log', 'sample_path': 'logs/sparse_sampling_per_component_2024_01_16_14_36_56/Samples'})
+Epoch 0:   0%|          | 0/58 [00:00<?, ?img/s]Epoch 0:   0%|          | 0/58 [00:23<?, ?img/s]
+Traceback (most recent call last):
+  File "/home/zozchaab/Medical-SAM-Adapter/train.py", line 194, in <module>
+    loss = function.train_sam_deepvision(args, net, optimizer, nice_train_loader, epoch, writer,vis_path=vis_path, vis = args.vis, schedulers=scheduler)
+  File "/home/zozchaab/Medical-SAM-Adapter/function.py", line 114, in train_sam_deepvision
+    img_emb = net.image_encoder(img.unsqueeze(0))
+  File "/home/zozchaab/anaconda3/envs/msa_env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/zozchaab/anaconda3/envs/msa_env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/zozchaab/Medical-SAM-Adapter/models/sam/modeling/image_encoder.py", line 126, in forward
+    x = blk(x)
+  File "/home/zozchaab/anaconda3/envs/msa_env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/zozchaab/anaconda3/envs/msa_env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/zozchaab/Medical-SAM-Adapter/models/sam/modeling/image_encoder.py", line 207, in forward
+    x = self.attn(x)
+  File "/home/zozchaab/anaconda3/envs/msa_env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/zozchaab/anaconda3/envs/msa_env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/zozchaab/Medical-SAM-Adapter/models/sam/modeling/image_encoder.py", line 269, in forward
+    attn = (q * self.scale) @ k.transpose(-2, -1)
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB. GPU 0 has a total capacty of 15.90 GiB of which 13.50 MiB is free. Including non-PyTorch memory, this process has 15.88 GiB memory in use. Of the allocated memory 15.17 GiB is allocated by PyTorch, and 3.88 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF

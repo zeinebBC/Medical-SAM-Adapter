@@ -27,8 +27,18 @@ import shutil
 import json
 import h5py
 
+def load_mask_from_file(mask_path):
+    with h5py.File(mask_path, 'r') as mask_h5:
+        if 'annotations' in mask_h5:
+            annotations = mask_h5['annotations']
+            if 'proposed' in annotations:
+                return torch.from_numpy(annotations['proposed'][:].astype(np.float64)).unsqueeze(0)
+            elif 'result' in annotations:
+                return torch.from_numpy(annotations['result'][:].astype(np.float64)).unsqueeze(0)
+    print("key error in mask loading!")
+    return None
 
-class iqs_dv_01(Dataset):
+class iqs_dv(Dataset):
     def __init__(self, data_path, crop_size, transform_3D=None, transform_msk_3D=None,transform_2D=None, transform_msk_2D=None):
         self.data_path = data_path
         self.crop_size = crop_size
@@ -75,12 +85,15 @@ class iqs_dv_01(Dataset):
         mask_filename = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_manual_dataset_{dataset_number}.h5', img_filename)
         #mask_filename = img_filename.split('.h5')[0] + '_data_data_manual.h5'
         mask_path = os.path.join(self.masks_path, mask_filename)
+    
         if not os.path.exists(mask_path):
             mask_filename = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_generated_dataset_{dataset_number}.h5', img_filename)
             mask_path = os.path.join(self.masks_path, mask_filename)
+            
+        mask_tensor = load_mask_from_file(mask_path)
 
-        with h5py.File(mask_path, 'r') as mask_h5:
-            mask_tensor = torch.from_numpy(mask_h5['annotations']['proposed'][:].astype(np.float64)).unsqueeze(0)
+
+        
 
         if self.transform_3D:
             img_tensor = self.transform_3D(img_tensor)
@@ -92,12 +105,13 @@ class iqs_dv_01(Dataset):
             
             img_tensor_slice = img_tensor[..., d]
             mask_tensor_slice = mask_tensor[..., d]
+            img_tensor_slice, mask_tensor_slice = crop_image_and_mask(img_tensor_slice.squeeze(0), mask_tensor_slice.squeeze(0), self.crop_size)
             if self.transform_2D:
                 img_tensor_slice = self.transform_2D(img_tensor_slice)
 
             if self.transform_msk_2D:
                 mask_tensor_slice = self.transform_msk_2D(mask_tensor_slice)
-            img_tensor_slice, mask_tensor_slice = crop_image_and_mask(img_tensor_slice, mask_tensor_slice, self.crop_size)
+            
             slices.append({
                 'image': img_tensor_slice,
                 'label': mask_tensor_slice,
@@ -176,7 +190,7 @@ def crop_image_and_mask(image, mask, crop_size):
     cropped_image = crop(image, crop_size,top_left_x,top_left_y)
     cropped_mask = crop(mask, crop_size, top_left_x, top_left_y)
 
-    return cropped_image, cropped_mask
+    return cropped_image.unsqueeze(0), cropped_mask.unsqueeze(0)
 
 
 def spilt_data(data_path = '/home/zozchaab/data/deepvision/iqs_dv_01'  ,destination_path = '/home/zozchaab/data/deepvision',train_ratio = 0.7, val_ratio = 0.2):

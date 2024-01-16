@@ -120,7 +120,7 @@ def train_sam_deepvision(args, net: nn.Module, optimizer, train_loader,
                 #n_pos = np.random.randint(1, n_points) if n_points > 1 else 1
                 #n_neg = np.random.randint(0, n_points-n_pos) if (n_points - n_pos) > 0 else 0
                 n_neg = 0
-                n_pos = 10
+                n_pos = 5
                 pts, lbls = sample_from_mask(mask.squeeze(0), mode="random", n_pos=n_pos,n_neg = n_neg) 
                 
 
@@ -249,7 +249,7 @@ def validation_sam_deepvision(args, net: nn.Module,  val_loader, epoch, writer,v
                     #n_pos = np.random.randint(1, n_points) if n_points > 1 else 1
                     #n_neg = np.random.randint(0, n_points-n_pos) if (n_points - n_pos) > 0 else 0
                     n_neg = 0
-                    n_pos = 10
+                    n_pos = 5
                     pts, lbls = sample_from_mask(mask.squeeze(0), mode="random", n_pos=n_pos,n_neg = n_neg) 
         
 
@@ -319,17 +319,10 @@ def validation_sam_deepvision(args, net: nn.Module,  val_loader, epoch, writer,v
 
 
                 '''vis images'''
-<<<<<<< HEAD
                 if vis:
                     if ind % vis == 0:
                         
                         visualize_batch(imgs=imgs, masks=targets, pred_masks=preds, names=names, prompts=prompts,original_preds=original_preds,save_path= vis_path)
-=======
-            if vis:
-                if ind % vis == 0:
-                    
-                    visualize_batch(imgs=imgs, masks=targets, pred_masks=preds, names=names, prompts=prompts,original_preds=original_preds,save_path= vis_path)
->>>>>>> origin/main
 
             ind += 1
             pbar.update()

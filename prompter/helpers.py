@@ -80,6 +80,8 @@ def sample_sparse_pos_neg_points(mask, n_pos: int = 5,n_neg: int = 5, cov_factor
 def sample_sparse_points(mask,idcs,n_points,cov_factor,mask_h,mask_w):    
     p_map = torch.ones_like(mask)
     points = []
+    if n_points == 0:
+        points.append(torch.Tensor(size=(0,2)).to(mask.device))
     # Sample points
     for p in range(n_points):
         # sample point from current image

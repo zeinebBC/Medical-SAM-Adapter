@@ -72,11 +72,7 @@ if args.weights != 0:
 args.path_helper = set_log_dir('logs', args.exp_name)
 logger = create_logger(args.path_helper['log_path'])
 logger.info(args)
-<<<<<<< HEAD
 vis_path = os.path.join("/home/zozchaab/Medical-SAM-Adapter/vis",args.exp_name,settings.TIME_NOW)
-=======
-vis_path = os.path.join("/home/zozchaab/Medical-SAM-Adapter/figs/vis",args.exp_name,settings.TIME_NOW)
->>>>>>> origin/main
 
 
 '''segmentation data'''
@@ -123,8 +119,8 @@ elif args.dataset == 'REFUGE':
     nice_test_loader = DataLoader(refuge_test_dataset, batch_size=args.b, shuffle=False, num_workers=8, pin_memory=True)
     '''end'''
 
-elif args.dataset == 'iqs_dv_01':
-    #spilt_data(data_path = '/home/zozchaab/data/deepvision_reduced/iqs_dv_01'  ,destination_path = '/home/zozchaab/data/deepvision_reduced')
+elif args.dataset == 'iqs_dv':
+    #spilt_data(data_path = '/home/zozchaab/data/deepvision_reduced/iqs_dv'  ,destination_path = '/home/zozchaab/data/deepvision_reduced')
     
     transform_msk_3D = transforms.Compose([
     FillMissingCells(desired_shape=(1,120,120,120)),
@@ -137,20 +133,12 @@ elif args.dataset == 'iqs_dv_01':
     ])
     transform_2d = transforms.Compose([
     lambda x: x.expand(3, -1, -1),
-<<<<<<< HEAD
     transforms.Lambda(lambda x: x / 65535.0),
     
     ])
 
-    train_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_train'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
-    val_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_val'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
-=======
-    
-    ])
-
-    train_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_train'), transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
-    val_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_val'), transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
->>>>>>> origin/main
+    train_dataset = iqs_dv(data_path=os.path.join(args.data_path,'iqs_dv_test'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
+    val_dataset = iqs_dv(data_path=os.path.join(args.data_path,'iqs_dv_val'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
     nice_train_loader = DataLoader(
         train_dataset,
         batch_size=args.b,
@@ -202,7 +190,7 @@ for epoch in range(settings.EPOCH):
             loss = function.train_sam_evican(args, net, optimizer, nice_train_loader, epoch, writer, vis = args.vis, schedulers=scheduler)
         elif args.dataset == 'cadis':
             loss = function.train_sam_cadis(args, net, optimizer, nice_train_loader, epoch, writer, vis = args.vis, schedulers=scheduler)
-        elif args.dataset == 'iqs_dv_01':
+        elif args.dataset == 'iqs_dv':
             loss = function.train_sam_deepvision(args, net, optimizer, nice_train_loader, epoch, writer,vis_path=vis_path, vis = args.vis, schedulers=scheduler)
         # TODO: ADD YOUR CUSTOM TRAINING LOOP HERE
         #elif args.dataset == 'your_dataset':
@@ -222,7 +210,7 @@ for epoch in range(settings.EPOCH):
                 val_loss, metric_results = function.validation_sam_evican(args, net, nice_test_loader, epoch, writer)
             elif args.dataset == 'cadis':
                 val_loss, metric_results = function.validation_sam_cadis(args, net, nice_test_loader, epoch, writer)
-            elif args.dataset == 'iqs_dv_01':
+            elif args.dataset == 'iqs_dv':
                 val_loss, metric_results = function.validation_sam_deepvision(args, net, nice_test_loader, epoch, writer,vis_path=vis_path,vis=args.vis)
             # TODO: Add your dataset here 
             # elif args.dataset == 'yourdataset':

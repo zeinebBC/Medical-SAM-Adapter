@@ -42,10 +42,7 @@ def parse_args():
     parser.add_argument('-num_sample', type=int, default=4 , help='sample pos and neg')
     parser.add_argument('-roi_size', type=int, default=96 , help='resolution of roi')
     parser.add_argument('-evl_chunk', type=int, default=None , help='evaluation chunk')
-<<<<<<< HEAD
     parser.add_argument('-crop_size', type=tuple, default=(120,120) , help='cropping size for the images and masks')
-=======
->>>>>>> origin/main
     parser.add_argument(
     '-data_path',
     type=str,
