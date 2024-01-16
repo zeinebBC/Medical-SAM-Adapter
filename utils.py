@@ -109,7 +109,7 @@ device = torch.device('cuda', args.gpu_device)
 # dis_lr = 0.0002
 # optimizerD = optim.Adam(netD.parameters(), lr=dis_lr, betas=(beta1, 0.999))
 '''end'''
-def visualize_batch(imgs, masks, pred_masks, names, prompts,original_preds, save_path='/home/zozchaab/Medical-SAM-Adapter/figs/vis'):
+def visualize_batch(imgs, masks, pred_masks, names, prompts,original_preds, save_path='/home/zozchaab/Medical-SAM-Adapter/vis'):
     imgs = imgs.detach().cpu().numpy()
     masks = masks.detach().cpu().numpy()
     os.makedirs(save_path, exist_ok=True)

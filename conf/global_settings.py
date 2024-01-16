@@ -22,7 +22,7 @@ MASK_TRAIN_STD = (21.46473779720519/255)
 #CIFAR100_TEST_STD = (0.2682515741720801, 0.2573637364478126, 0.2770957707973042)
 
 #directory to save weights file
-CHECKPOINT_PATH = '/home/zozchaab/Medical-SAM-Adapter/checkpoint'
+CHECKPOINT_PATH = 'checkpoint'
 
 #total training epoches
 EPOCH = 100 
@@ -40,7 +40,7 @@ while i * 5 <= EPOCH:
 TIME_NOW = datetime.now().isoformat()
 
 #tensorboard log dir
-LOG_DIR = '/home/zozchaab/Medical-SAM-Adapter/log'
+LOG_DIR = 'runs'
 
 #save weights file per SAVE_EPOCH epoch
 SAVE_EPOCH = 10

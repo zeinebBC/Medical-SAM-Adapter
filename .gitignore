@@ -1,4 +1,5 @@
 /checkpoint
 /logs
 /runs
+/vis
 pipline.sh

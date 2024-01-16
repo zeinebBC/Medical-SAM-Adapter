@@ -6,7 +6,7 @@ import os
 import pickle
 import random
 import sys
-
+import re
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,8 +29,9 @@ import h5py
 
 
 class iqs_dv_01(Dataset):
-    def __init__(self, data_path, transform_3D=None, transform_msk_3D=None,transform_2D=None, transform_msk_2D=None):
+    def __init__(self, data_path, crop_size, transform_3D=None, transform_msk_3D=None,transform_2D=None, transform_msk_2D=None):
         self.data_path = data_path
+        self.crop_size = crop_size
         self.transform_3D = transform_3D
         self.transform_msk_3D = transform_msk_3D
         self.transform_2D = transform_2D
@@ -48,9 +49,11 @@ class iqs_dv_01(Dataset):
 
     def __getitem__(self, index):
         img_filename = self.image_files[index]
+        match = re.search(r'_dataset_(\d+)\.h5$', img_filename)
+        dataset_number = match.group(1)
 
         # Load JSON annotation
-        annotation_file = img_filename.split('.h5')[0] + '_data_data.json'
+        annotation_file = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_dataset_{dataset_number}.json', img_filename)
         annotation_path = os.path.join(self.annotations_path, annotation_file)
         with open(annotation_path, 'r') as f:
             annotation_data = json.load(f)
@@ -62,12 +65,20 @@ class iqs_dv_01(Dataset):
         
         # Load image HDF5 file
         img_path = os.path.join(self.images_path, img_filename)
+        
         with h5py.File(img_path, 'r') as img_h5:
             img_tensor = torch.from_numpy(img_h5['data']['data'][:].astype(np.float64)).unsqueeze(0)
 
         # Load mask HDF5 file
-        mask_filename = img_filename.split('.h5')[0] + '_data_data_manual.h5'
+        
+
+        mask_filename = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_manual_dataset_{dataset_number}.h5', img_filename)
+        #mask_filename = img_filename.split('.h5')[0] + '_data_data_manual.h5'
         mask_path = os.path.join(self.masks_path, mask_filename)
+        if not os.path.exists(mask_path):
+            mask_filename = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_generated_dataset_{dataset_number}.h5', img_filename)
+            mask_path = os.path.join(self.masks_path, mask_filename)
+
         with h5py.File(mask_path, 'r') as mask_h5:
             mask_tensor = torch.from_numpy(mask_h5['annotations']['proposed'][:].astype(np.float64)).unsqueeze(0)
 
@@ -86,11 +97,11 @@ class iqs_dv_01(Dataset):
 
             if self.transform_msk_2D:
                 mask_tensor_slice = self.transform_msk_2D(mask_tensor_slice)
-            
+            img_tensor_slice, mask_tensor_slice = crop_image_and_mask(img_tensor_slice, mask_tensor_slice, self.crop_size)
             slices.append({
                 'image': img_tensor_slice,
                 'label': mask_tensor_slice,
-                'metadata': {'img_idx': img_idx, 'slice_idx': d}
+                'metadata': {'img_idx': img_idx, 'slice_idx': d, 'dataset_idx':dataset_number}
             })
 
         return slices
@@ -105,7 +116,7 @@ def collate_fn(batch):
             for slice_data in item:
                 images.append(slice_data['image'])
                 labels.append(slice_data['label'])
-                slice_idx.append(f"{slice_data['metadata']['img_idx']}_{slice_data['metadata']['slice_idx']}")
+                slice_idx.append(f"{slice_data['metadata']['img_idx']}_{slice_data['metadata']['slice_idx']}_{slice_data['metadata']['dataset_idx']}")
 
     combined = list(zip(images, labels, slice_idx))  
     random.shuffle(combined)  
@@ -138,6 +149,34 @@ class FillMissingCells:
 
         return padded_tensor
 
+
+def interpolate(image,crop_size):
+    original_height, original_width = image.shape[-2:]
+    
+    # Use the maximum of original size and crop size for interpolation
+    interp_h = max(original_height, crop_size[0])
+    interp_w = max(original_width, crop_size[1])
+
+    # Interpolate the image using bilinear interpolation
+    image = F.interpolate(image.unsqueeze(0).unsqueeze(0), size=(interp_h, interp_w), mode='bilinear').squeeze(0).squeeze(0)
+    return image
+
+def crop(image,crop_size,top_left_x,top_left_y):
+    # Crop the image
+    return image[top_left_y:top_left_y + crop_size[0], top_left_x:top_left_x + crop_size[1]]
+
+def crop_image_and_mask(image, mask, crop_size):
+    
+    image = interpolate(image,crop_size)
+    mask = interpolate(mask,crop_size)
+    # Randomly choose the top-left corner of the crop
+    top_left_x = np.random.randint(0, image.shape[1] - crop_size[1] + 1)
+    top_left_y = np.random.randint(0, image.shape[0] - crop_size[0] + 1)
+    
+    cropped_image = crop(image, crop_size,top_left_x,top_left_y)
+    cropped_mask = crop(mask, crop_size, top_left_x, top_left_y)
+
+    return cropped_image, cropped_mask
 
 
 def spilt_data(data_path = '/home/zozchaab/data/deepvision/iqs_dv_01'  ,destination_path = '/home/zozchaab/data/deepvision',train_ratio = 0.7, val_ratio = 0.2):

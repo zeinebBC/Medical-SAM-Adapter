@@ -319,10 +319,10 @@ def validation_sam_deepvision(args, net: nn.Module,  val_loader, epoch, writer,v
 
 
                 '''vis images'''
-            if vis:
-                if ind % vis == 0:
-                    
-                    visualize_batch(imgs=imgs, masks=targets, pred_masks=preds, names=names, prompts=prompts,original_preds=original_preds,save_path= vis_path)
+                if vis:
+                    if ind % vis == 0:
+                        
+                        visualize_batch(imgs=imgs, masks=targets, pred_masks=preds, names=names, prompts=prompts,original_preds=original_preds,save_path= vis_path)
 
             ind += 1
             pbar.update()
