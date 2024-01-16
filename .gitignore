@@ -1,6 +1,9 @@
 /checkpoint
 /logs
 /runs
+<<<<<<< HEAD
 /vis
 /checkpoint_2
+=======
+>>>>>>> origin/main
 pipline.sh

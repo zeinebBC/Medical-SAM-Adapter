@@ -72,7 +72,11 @@ if args.weights != 0:
 args.path_helper = set_log_dir('logs', args.exp_name)
 logger = create_logger(args.path_helper['log_path'])
 logger.info(args)
+<<<<<<< HEAD
 vis_path = os.path.join("/home/zozchaab/Medical-SAM-Adapter/vis",args.exp_name,settings.TIME_NOW)
+=======
+vis_path = os.path.join("/home/zozchaab/Medical-SAM-Adapter/figs/vis",args.exp_name,settings.TIME_NOW)
+>>>>>>> origin/main
 
 
 '''segmentation data'''
@@ -133,12 +137,20 @@ elif args.dataset == 'iqs_dv_01':
     ])
     transform_2d = transforms.Compose([
     lambda x: x.expand(3, -1, -1),
+<<<<<<< HEAD
     transforms.Lambda(lambda x: x / 65535.0),
     
     ])
 
     train_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_train'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
     val_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_val'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
+=======
+    
+    ])
+
+    train_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_train'), transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
+    val_dataset = iqs_dv_01(data_path=os.path.join(args.data_path,'iqs_dv_01_val'), transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
+>>>>>>> origin/main
     nice_train_loader = DataLoader(
         train_dataset,
         batch_size=args.b,
