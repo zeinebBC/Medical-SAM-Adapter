@@ -36,6 +36,8 @@ def count_images_in_subfolders(main_folder):
 
 
 def move_unlabeled_images(main_folder):
+    total_data_count = 0
+    unlabeled_data_count = 0
     for i in range(8): 
         subfolder_path = os.path.join(main_folder, f'iqs_dv_0{i+1}')
         unlabeled_images_path = os.path.join(subfolder_path, 'unlabeled_images')
@@ -47,6 +49,7 @@ def move_unlabeled_images(main_folder):
 
             for image_name in os.listdir(os.path.join(subfolder_path, 'images')):
                 image_path = os.path.join(subfolder_path, 'images', image_name)
+                total_data_count += 1
                 match = re.search(r'_dataset_(\d+)\.h5$', image_name)
                 dataset_number = match.group(1)
 
@@ -54,9 +57,11 @@ def move_unlabeled_images(main_folder):
                 mask_path = os.path.join(subfolder_path, 'masks', mask_filename)  
                 mask_filename_2 = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_generated_dataset_{dataset_number}.h5', image_name)
                 mask_path_2 = os.path.join(subfolder_path, 'masks', mask_filename_2) 
-
-                if not os.path.exists(mask_path) and not os.path.exists(mask_path_2) :
+                #mask_filename_3 = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_user_sample_dataset_{dataset_number}.h5', image_name)
+                #mask_path_3 = os.path.join(subfolder_path, 'masks', mask_filename_3)
+                if not os.path.exists(mask_path) and not os.path.exists(mask_path_2) and not os.path.exists(mask_path_2):
                     # Move image to unlabeled_images
+                    unlabeled_data_count += 1
                     shutil.move(image_path, os.path.join(unlabeled_images_path, image_name))
                     annotation_filename = re.sub(r'_dataset_(\d+\.h5)$', fr'_data_data_dataset_{dataset_number}.json', image_name)
                     
@@ -67,6 +72,11 @@ def move_unlabeled_images(main_folder):
                         shutil.move(annotation_path, os.path.join(unlabeled_annotations_path, annotation_filename))
         else:
             print(f"Subfolder 'iqs_dv_0{i+1}': Folder not found")
+    if total_data_count > 0:
+        ratio = unlabeled_data_count / total_data_count
+        print(f"Total Data Count: {total_data_count}")
+        print(f"Unlabeled Data Count: {unlabeled_data_count}")
+        print(f"Ratio of Unlabeled Data to Whole Data: {ratio:.2%}")
         
 
 import os
@@ -180,7 +190,8 @@ def iterate_h5_files(folder_path):
             read_h5_file(file_path)
 
 # Specify the folder containing the .h5 files
-folder_path = '/home/zozchaab/data/deepvision/deepvision/iqs_dv_test/masks'
+#folder_path = '/mnt/data/backup/CRT_Efficient_Annotation_SAM/iqs/deepvision/'
 
 # Call the function to iterate through .h5 files in the folder
-iterate_h5_files(folder_path)
+#iterate_h5_files(folder_path)
+move_unlabeled_images(main_folder_path)

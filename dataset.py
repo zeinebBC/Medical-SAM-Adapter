@@ -166,12 +166,6 @@ class FillMissingCells:
         return padded_tensor
 
 
-def interpolate(image,target_h,target_w,mode):
-
-    # Interpolate the image using bilinear interpolation
-    image = F.interpolate(image.unsqueeze(0).unsqueeze(0), size=(target_h, target_w), mode=mode).squeeze(0).squeeze(0)
-    return image
-
 
 
 def crop(image,crop_size,top_left_x,top_left_y):
@@ -179,20 +173,32 @@ def crop(image,crop_size,top_left_x,top_left_y):
     return image[top_left_y:top_left_y + crop_size, top_left_x:top_left_x + crop_size]
 
 def crop_image_and_mask(image, mask, crop_size):
-    
-    target_h = max(image.shape[0],crop_size)
-    target_w = max(image.shape[1],crop_size)
-  
-    image = interpolate(image,target_h,target_w,mode='bilinear')
-    mask = interpolate(mask,target_h,target_w, mode ='nearest')
-    # Randomly choose the top-left corner of the crop
-    top_left_x = np.random.randint(0, image.shape[1] - crop_size + 1)
-    top_left_y = np.random.randint(0, image.shape[0] - crop_size + 1)
-    
-    cropped_image = crop(image, crop_size,top_left_x,top_left_y)
-    cropped_mask = crop(mask, crop_size, top_left_x, top_left_y)
+    # Pad or crop the image to the target size
+    h, w = image.shape[-2:]
+    print(h,w)
+    if h < crop_size or w < crop_size:
+        # Calculate padding needed
+        pad_h = max(0, crop_size - h)
+        pad_w = max(0, crop_size - w)
 
-    return cropped_image.unsqueeze(0), cropped_mask.unsqueeze(0)
+        # Calculate padding on each side
+        top_pad = pad_h // 2
+        bottom_pad = pad_h - top_pad
+        left_pad = pad_w // 2
+        right_pad = pad_w - left_pad
+
+        # Pad the image
+        image = F.pad(image, (left_pad, right_pad, top_pad, bottom_pad), mode='constant', value=0)
+        mask = F.pad(mask, (left_pad, right_pad, top_pad, bottom_pad), mode='constant', value=0)
+    elif h > crop_size or w > crop_size:
+        # Randomly choose the top-left corner of the crop
+        top_left_x = np.random.randint(0, w - crop_size + 1)
+        top_left_y = np.random.randint(0, h - crop_size + 1)
+  
+        image = crop(image, crop_size,top_left_x,top_left_y)
+        mask = crop(mask, crop_size, top_left_x, top_left_y)
+
+    return image.unsqueeze(0), mask.unsqueeze(0)
 
 
 def spilt_data(data_path = '/home/zozchaab/data/deepvision/iqs_dv_01'  ,destination_path = '/home/zozchaab/data/deepvision',train_ratio = 0.7, val_ratio = 0.2):
