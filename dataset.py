@@ -105,7 +105,9 @@ class iqs_dv(Dataset):
             
             img_tensor_slice = img_tensor[..., d]
             mask_tensor_slice = mask_tensor[..., d]
+            
             img_tensor_slice, mask_tensor_slice = crop_image_and_mask(img_tensor_slice.squeeze(0), mask_tensor_slice.squeeze(0), self.crop_size)
+            
             if self.transform_2D:
                 img_tensor_slice = self.transform_2D(img_tensor_slice)
 
@@ -164,28 +166,35 @@ class FillMissingCells:
         return padded_tensor
 
 
-def interpolate(image,crop_size):
-    original_height, original_width = image.shape[-2:]
-    
-    # Use the maximum of original size and crop size for interpolation
-    interp_h = max(original_height, crop_size[0])
-    interp_w = max(original_width, crop_size[1])
+def interpolate_img(image,target_h,target_w):
 
     # Interpolate the image using bilinear interpolation
-    image = F.interpolate(image.unsqueeze(0).unsqueeze(0), size=(interp_h, interp_w), mode='bilinear').squeeze(0).squeeze(0)
+    image = F.interpolate(image.unsqueeze(0).unsqueeze(0), size=(target_h, target_w), mode='bilinear').squeeze(0).squeeze(0)
     return image
+
+
+
+def interpolate_mask(mask, target_h,target_w):
+    
+    resized_mask = cv2.resize(mask.numpy(), (target_w,target_h), interpolation=cv2.INTER_NEAREST)
+    resized_mask_binary = torch.tensor((resized_mask > 0).astype(np.float64))
+    
+    return resized_mask_binary
 
 def crop(image,crop_size,top_left_x,top_left_y):
     # Crop the image
-    return image[top_left_y:top_left_y + crop_size[0], top_left_x:top_left_x + crop_size[1]]
+    return image[top_left_y:top_left_y + crop_size, top_left_x:top_left_x + crop_size]
 
 def crop_image_and_mask(image, mask, crop_size):
     
-    image = interpolate(image,crop_size)
-    mask = interpolate(mask,crop_size)
+    target_h = max(image.shape[0],crop_size)
+    target_w = max(image.shape[1],crop_size)
+  
+    image = interpolate_img(image,target_h,target_w)
+    mask = interpolate_mask(mask,target_h,target_w)
     # Randomly choose the top-left corner of the crop
-    top_left_x = np.random.randint(0, image.shape[1] - crop_size[1] + 1)
-    top_left_y = np.random.randint(0, image.shape[0] - crop_size[0] + 1)
+    top_left_x = np.random.randint(0, image.shape[1] - crop_size + 1)
+    top_left_y = np.random.randint(0, image.shape[0] - crop_size + 1)
     
     cropped_image = crop(image, crop_size,top_left_x,top_left_y)
     cropped_mask = crop(mask, crop_size, top_left_x, top_left_y)

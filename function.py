@@ -110,7 +110,7 @@ def train_sam_deepvision(args, net: nn.Module, optimizer, train_loader,
             targets = pack['label'].to(dtype = torch.float32, device = GPUdevice)
             names = pack['metadata']
             batch_loss = 0.0
-            for img, mask in zip(imgs, targets):
+            for img, mask,name in zip(imgs, targets,names):
                 img_emb = net.image_encoder(img.unsqueeze(0))
                 # Create Prompts
                 

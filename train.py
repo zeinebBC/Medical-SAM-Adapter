@@ -137,8 +137,8 @@ elif args.dataset == 'iqs_dv':
     
     ])
 
-    train_dataset = iqs_dv(data_path=os.path.join(args.data_path,'iqs_dv_test'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
-    val_dataset = iqs_dv(data_path=os.path.join(args.data_path,'iqs_dv_val'),crop_size=args.crop_size, transform_3D=transform_3D, transform_msk_3D=transform_msk_3D,transform_2D=transform_2d)
+    train_dataset = iqs_dv(data_path=os.path.join(args.data_path,'iqs_dv_train'),crop_size=args.crop_size,transform_2D=transform_2d)
+    val_dataset = iqs_dv(data_path=os.path.join(args.data_path,'iqs_dv_val'),crop_size=args.crop_size,transform_2D=transform_2d)
     nice_train_loader = DataLoader(
         train_dataset,
         batch_size=args.b,
